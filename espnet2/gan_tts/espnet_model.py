@@ -231,3 +231,19 @@ class ESPnetGANTTSModel(AbsGANESPnetModel):
             feats_dict.update(energy=energy, energy_lengths=energy_lengths)
 
         return feats_dict
+
+
+    def load_state_dict(self, state_dict, *args, **kwargs):
+        embeding_layer_key = 'tts.generator.text_encoder.emb.weight'
+        if embeding_layer_key in state_dict:
+            state_emb_weight = state_dict[embeding_layer_key]
+            current_emb_weight = self.tts.generator.text_encoder.emb.weight
+            if state_emb_weight.shape != current_emb_weight.shape:
+                # 'emb.weight'のサイズが異なる場合、新しいパラメータを作成し、初期値で埋めます
+                new_emb_weight = torch.zeros_like(current_emb_weight)
+                min_rows = min(state_emb_weight.shape[0], current_emb_weight.shape[0])
+                new_emb_weight[:min_rows, :] = state_emb_weight[:min_rows, :]
+                state_dict[embeding_layer_key] = new_emb_weight
+
+        # フック前のload_state_dictメソッドを呼び出してパラメータを読み込みます
+        super(AbsGANESPnetModel, self).load_state_dict(state_dict, *args, **kwargs)
