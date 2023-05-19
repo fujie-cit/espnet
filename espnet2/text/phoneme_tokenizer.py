@@ -20,6 +20,7 @@ g2p_choices = [
     "pyopenjtalk_accent",
     "pyopenjtalk_accent_with_pause",
     "pyopenjtalk_prosody",
+    "pyopenjtalk_prosody_with_special_token",
     "pypinyin_g2p",
     "pypinyin_g2p_phone",
     "pypinyin_g2p_phone_without_prosody",
@@ -173,6 +174,40 @@ def pyopenjtalk_g2p_prosody(text: str, drop_unvoiced_vowels: bool = True) -> Lis
         # pitch rising
         elif a2 == 1 and a2_next == 2:
             phones.append("[")
+
+    return phones
+
+
+def pyopenjtalk_g2p_prosody_with_special_token(text: str, drop_unvoiced_vowels: bool = True) -> List[str]:
+    """Extract phoneme + prosody symbol sequence from input full-context labels,
+    with a special token inserted at the beginning if present.
+
+    Args:
+        text (str): Input text.
+        drop_unvoiced_vowels (bool): Whether to drop unvoiced vowels.
+
+    Returns:
+        List[str]: List of phoneme + prosody symbols.
+
+    Examples:
+        >>> pyopenjtalk_g2p_prosody_with_special_token("<angry>こんにちは")
+        ['<angry>', '^', 'k', 'o', '[', 'N', 'n', 'i', 'ch', 'i', 'w', 'a', '$']
+
+    """
+    # Check if the text starts with a special token
+    special_token_match = re.match(r"<(.*?)>", text)
+    special_token = special_token_match.group(0) if special_token_match else None
+
+    # Remove the special token from the text if present
+    if special_token:
+        text = text.replace(special_token, "", 1)
+
+    # Call pyopenjtalk_g2p_prosody on the modified text
+    phones = pyopenjtalk_g2p_prosody(text, drop_unvoiced_vowels)
+
+    # Insert the special token at the beginning of the phones list if present
+    if special_token:
+        phones.insert(0, special_token)
 
     return phones
 
@@ -456,6 +491,8 @@ class PhonemeTokenizer(AbsTokenizer):
             self.g2p = pyopenjtalk_g2p_accent_with_pause
         elif g2p_type == "pyopenjtalk_prosody":
             self.g2p = pyopenjtalk_g2p_prosody
+        elif g2p_type == "pyopenjtalk_prosody_with_special_token":
+            self.g2p = pyopenjtalk_g2p_prosody_with_special_token
         elif g2p_type == "pypinyin_g2p":
             self.g2p = pypinyin_g2p
         elif g2p_type == "pypinyin_g2p_phone":
