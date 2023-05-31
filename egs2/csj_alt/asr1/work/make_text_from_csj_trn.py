@@ -1,8 +1,10 @@
 import os
 import re
+from typing import List, Tuple, Dict
 
-
-# カナ表記('|'区切り)の文字列を，スペース区切りのカナの列にする        
+##
+# トークナイズ用のカナ記号リストを作成
+_kana_list = None
 _kanas = """ア イ ウ エ オ カ キ ク ケ コ ガ ギ グ ゲ ゴ サ シ ス セ ソ
 ザ ジ ズ ゼ ゾ タ チ ツ テ ト ダ デ ド ナ ニ ヌ ネ ノ ハ ヒ フ ヘ ホ
 バ ビ ブ ベ ボ パ ピ プ ペ ポ マ ミ ム メ モ ラ リ ル レ ロ ヤ ユ ヨ
@@ -12,18 +14,20 @@ _kanas = """ア イ ウ エ オ カ キ ク ケ コ ガ ギ グ ゲ ゴ サ シ 
 グヮ シェ ジェ ティ トゥ チェ ツァ ツィ ツェ ツォ ヒェ ファ フィ フェ フォ フュ
 テュ ブィ ニェ ミェ スィ ズィ ヴァ ヴィ ヴ ヴェ ヴォ ー ッ | <sp>"""
 _kana_list = [x.replace(' ', '') for x in _kanas.replace('\n', ' ').split(' ')]
-# 長さの降順にソート
 _kana_list = sorted(_kana_list, key=len, reverse=True)
 
-# カナ表記の文字列を，カナのリストにする
-def kana_string_to_list(string):
-    """カナ表記の文字列を，カナのリストにする
 
+def tokenize_kana_string(string: str) -> List[str]:
+    """カナ表記の文字列を，カナ記号にトークナイズする.
+    動作例:
+        >>> tokenize_kana_string('エー|キョーワ<sp>ハイ|デス|ネー')
+        ['エー', '|', 'キョー', 'ワ', '<sp>', 'ハイ', '|', 'デス', '|', 'ネー']
+    
     Args:
         string (str): カナ表記の文字列
 
     Returns:
-        list: カナのリスト
+        List[str]: カナ記号のリスト
     """
     result = []
     while len(string) > 0:
@@ -36,126 +40,213 @@ def kana_string_to_list(string):
             raise Exception(f'Invalid kana string: {string}')
     return result
 
-def convert_tagged_kana_string_to_kana_list_and_paralinguistic_info(string):
-    def extract_tag_string(s):
-        if len(s) == 0:
-            return '', ''
-        if s[0] != '(':
-            raise ValueError('タグの始まりではありません')
-        stack = []
-        for i, c in enumerate(s):
-            if c == '(':
-                stack.append(i)
-            elif c == ')':
-                stack.pop()
-                if len(stack) == 0:
-                    return s[:i+1], s[i+1:]
-        raise ValueError('タグの終わりが見つかりません')
+
+def extract_head_tagged_string(s) -> Tuple[str, str]:
+    """文字列の先頭に含まれるタグ付き文字列を抽出する.
+
+    動作例:
+        >>> extract_head_tagged_string('(D コレ(F エー)ハイ(? ア,ノ))ハイ(F エー)ハイ')
+        ('(D コレ(F エー)ハイ(? ア,ノ))', 'ハイ(F エー)ハイ')
+
+    Args:
+        s (str): タグ付き文字列
+
+    Returns:
+        Tuple[str, str]: タグ付き文字列とそれ以降の文字列
+    """
+    if len(s) == 0:
+        return '', ''
+    if s[0] != '(':
+        raise ValueError('not begin with (')
+    stack = []
+    for i, c in enumerate(s):
+        if c == '(':
+            stack.append(i)
+        elif c == ')':
+            stack.pop()
+            if len(stack) == 0:
+                return s[:i+1], s[i+1:]
+    raise ValueError('not end with )')
+
+
+def split_tagged_content_with_semicolon_or_comma(content: str) -> List[str]:
+    """タグが付けられた文字列を，セミコロンかカンマで分割する.
     
-    def split_content_with_semicolon_or_comma(content):
-        result = []
-        prev = 0
-        open_parenthesis_count = 0
-        for i, c in enumerate(content):
-            if c in (';', ','):
-                if open_parenthesis_count == 0:
-                    result.append(content[prev:i])
-                    prev = i + 1
-            elif c == '(':
-                open_parenthesis_count += 1
-            elif c == ')':
-                open_parenthesis_count -= 1
-        result.append(content[prev:])
-        return result
+    動作例:
+        >>> split_tagged_content_with_semicolon_or_comma('ハイ(F ウン)ハイ;ハイ')
+        ['ハイ(F ウン)ハイ', 'ハイ']
+        >>> split_tagged_content_with_semicolon_or_comma('ハイ(F ウン)ハイ,ハイ')
+        ['ハイ(F ウン)ハイ', 'ハイ']
 
-    tag2label_tag = {'D2': 'D'}
-    def extract_text_from_tagged_string(s):
-        # 空文字列の場合は～文字列を返す
-        if len(s) == 0:
-            return ''
+    Args:
+        content (str): タグが付けられた文字列
 
-        result = []
-        result_tag = []
+    Returns:
+        List[str]: 分割された文字列のリスト
+    """
+    result = []
+    prev = 0
+    open_parenthesis_count = 0
+    for i, c in enumerate(content):
+        if c in (';', ','):
+            if open_parenthesis_count == 0:
+                result.append(content[prev:i])
+                prev = i + 1
+        elif c == '(':
+            open_parenthesis_count += 1
+        elif c == ')':
+            open_parenthesis_count -= 1
+    result.append(content[prev:])
+    return result
 
-        while len(s) > 0:
-            # タグが始まる前の部分を取り出す
-            match = re.match(r'^([^(]+)(.*)$', s)
-            if match:
-                kana_list = kana_string_to_list(match.group(1))
-                result.extend(kana_list)
-                result_tag.extend(['N'] * len(kana_list))
 
-                s = match.group(2)
+def tokenize_kana_string_and_extract_label_seq(string: str, tag2label: Dict[str, str]={'D2': 'D', '?': 'W'}) -> Tuple[List[str], List[str]]:
+    """カナ表記の文字列（タグ付き）をカナ記号列とラベル列に変換する.
+
+    実行例:
+        >>> tokenize_kana_string_and_extract_label_seq('(D2 コレ(F エー)ハイ(? ア,ノ))ハイ(F エー)ハイ')
+        ['コ', 'レ', 'エ',  'ー',  'ハ', 'イ', 'ア',  'ハ', 'イ', 'エ', 'ー', 'ハ', 'イ'], 
+        ['ND', 'ND', 'NDF, 'NDF', 'D',  'D',  'ND?', 'N',  'N',  'NF', 'NF', 'N', 'N']
+
+    説明:
+        - タグを消去したカナ文字列をトークナイズする
+        - トークナイズされたカナに合わせて，ラベルの列が生成される
+        - ラベル
+          - Nはすべてのトークンに付与される
+          - タグ名がラベルとして付与される
+          - タグ名とラベルが異なる場合，tag2labelで変換される
+          - タグが入れ子になっている場合は複数のラベルが連結された文字列が付与される
+
+    Args:
+        string (str): カナ表記の文字列（タグ付き）
+        tag2label (Dict[str, str], optional): タグ名からラベルへの変換辞書. Defaults to {'D2': 'D'}.
+    
+    Returns:
+        Tuple[List[str], List[str]]: カナ記号列とラベル列
+    """
+    # 空文字列の場合はそのまま返す
+    if len(string) == 0:
+        return ''
+
+    result = []
+    result_label = []
+
+    while len(string) > 0:
+        match = re.match(r'^([^(]+)(.*)$', string)
+        if match:
+            # タグ開始以前の部分をトークナイズ
+            kana_list = tokenize_kana_string(match.group(1))
+            result.extend(kana_list)
+            result_label.extend(['N'] * len(kana_list))
+
+            string = match.group(2)
+        else:
+            # タグ
+            tagged_string, string = extract_head_tagged_string(string)
+            match_ = re.match(r'^\(([^ ]+) (.+)\)$', tagged_string)
+            if not match_:
+                if tagged_string == '(?)':
+                    continue
+                elif tagged_string == '(L )':
+                    # 1例 (L <FV>) というものがあることを確認
+                    continue
+                else:
+                    raise Exception('Invalid tagged string: {}'.format(tagged_string))
+
+            tag = match_.group(1)
+            content = match_.group(2)
+            # タグごとにコンテンツの絞り込みをする
+            if tag in ('F', 'D', 'D2', 'M', 'O', 'X', '笑', '泣', '咳', 'L'):
+                # これらのタグの場合はそのまま
+                pass
             else:
-                # 最長一致でタグの部分を取り出す
-                tagged_string, s = extract_tag_string(s)
-                match_ = re.match(r'^\(([^ ]+) (.+)\)$', tagged_string)
-                if not match_:
-                    if tagged_string == '(?)':
-                        continue
-                    elif tagged_string == '(L )':
-                        # 1例 (L <FV>) というものがあることを確認
-                        continue
-                    else:
-                        raise Exception('Invalid tagged string: {}'.format(tagged_string))
-                tag = match_.group(1)
-                content = match_.group(2)
-                # タグごとにコンテンツの絞り込みをする
-                if tag in ('F', 'D', 'D2', 'M', 'O', 'X', '笑', '泣', '咳', 'L'):
-                    # これらのタグの場合はそのまま
-                    pass
+                # とりあえずセミコロンとカンマで分割
+                contents = split_tagged_content_with_semicolon_or_comma(content)
+                if tag == '?':
+                    # ? の場合は最初の要素だけ
+                    content = contents[0]
+                elif tag in ('W', 'B'):
+                    # W, B の場合は最初の要素だけ
+                    content = contents[0]
                 else:
-                    # とりあえずセミコロンとカンマで分割
-                    contents = split_content_with_semicolon_or_comma(content)
-                    if tag == '?':
-                        # ? の場合は最初の要素だけ
-                        content = contents[0]
-                    elif tag in ('W', 'B'):
-                        # W, B の場合は最初の要素だけ
-                        content = contents[0]
-                    else:
-                        raise Exception('Unknown tag: {}'.format(tag))
+                    raise Exception('Unknown tag: {}'.format(tag))
 
-                if tag in tag2label_tag:
-                    label_tag = tag2label_tag[tag]
-                else:
-                    label_tag = tag
-                # content がタグを含む場合は再帰処理をする
-                if '(' in content:
-                    kana_list, tag_list = extract_text_from_tagged_string(content)
-                    tag_list = [t + label_tag for t in tag_list]
-                else:
-                    kana_list = kana_string_to_list(content)
-                    tag_list = ['N'+label_tag] * len(kana_list)
-                result.extend(kana_list)
-                result_tag.extend(tag_list)
+            if tag in tag2label:
+                label_tag = tag2label[tag]
+            else:
+                label_tag = tag
+
+            # content がタグを含む場合は再帰処理をする
+            if '(' in content:
+                kana_list, tag_list = tokenize_kana_string_and_extract_label_seq(content, tag2label)
+                tag_list = [t + label_tag for t in tag_list]
+            else:
+                kana_list = tokenize_kana_string(content)
+                tag_list = ['N'+label_tag] * len(kana_list)
+            result.extend(kana_list)
+            result_label.extend(tag_list)
                 
-        return result, result_tag
+    return result, result_label
 
-    return extract_text_from_tagged_string(string)
 
-def make_text_separated_kana(flattened_trn,
+def convert_labels_to_flags(labels, target):
+    flags = []
+    for label in labels:
+        utt_id, label = label.split(' ', 1)
+        fs = []
+        for l in label.split(' '):
+            if target in l:
+                fs.append('1')
+            else:
+                fs.append('0')
+        flags.append(f"{utt_id} {' '.join(fs)}")
+    return flags
+
+
+def make_utterance_id_from_utterance_info(lecture_id, utterance_info):
+    """発話情報から発話IDを生成する.
+
+    動作例:
+        >>> make_utterance_id_from_utterance_info('A01F0001', {'start': 1.234, 'end': 5.467, 'channel': 'L'})
+        'A01F0001_0001234_0005467'
+        >>> make_utterance_id_from_utterance_info('D01F0001', {'start': 1.234, 'end': 5.467, 'channel': 'L'})
+        'D01F0001L_0001234_0005467'
+    """
+    start = utterance_info['start']
+    end = utterance_info['end']
+    if lecture_id[0] == 'D':
+        lecture_id_with_ch = lecture_id + utterance_info['channel']
+    else:
+        lecture_id_with_ch = lecture_id
+    utt_id = f"{lecture_id_with_ch}_" + \
+                f"{int(start):04d}{int(start*1000)%1000:03d}_" + \
+                f"{int(end):04d}{int(end*1000)%1000:03d}"
+    return utt_id    
+
+
+def make_text_tokenized_kana(flattened_trn,
                              remove_word_sep=False, remove_sp=False,
                              remove_privacy_utt=True,
                              remove_extra_content=True):
     """カナ文のスペース区切りのリスト，およびパラ言語情報のスペース区切りリストを作成する
+
+    Args:
+        flattened_trn (Dict): トランスクリプトの情報
+        remove_word_sep (bool, optional): 単語区切りの記号を削除するかどうか. Defaults to False.
+        remove_sp (bool, optional): <sp>を削除するかどうか. Defaults to False.
+        remove_privacy_utt (bool, optional): プライバシー保護のための発話を削除するかどうか. Defaults to True.
+        remove_extra_content (bool, optional): 非語彙的な発話内容を削除するかどうか. Defaults to True.
+
+    Returns:
+        Tuple[List[str], List[str], List[str]]: カナ文のスペース区切りのリスト，パラ言語情報のスペース区切り，セグメント情報のスペース区切りのリスト
     """
     texts = []
-    tags = []
+    labels = []
     segments = []
 
     lecture_id = flattened_trn['lecture_id']
     for utterance in flattened_trn['flattened_utterances']:
-        start = utterance['start']
-        end = utterance['end']
-        if lecture_id[0] == 'D':
-            lecture_id_with_ch = lecture_id + utterance['channel']
-        else:
-            lecture_id_with_ch = lecture_id
-        utt_id = f"{lecture_id_with_ch}_" + \
-                 f"{int(start):04d}{int(start*1000)%1000:03d}_" + \
-                 f"{int(end):04d}{int(end*1000)%1000:03d}"
-
+        utt_id = make_utterance_id_from_utterance_info(lecture_id, utterance)
         text = utterance['kana_text']
 
         # ボーカルフライ
@@ -176,7 +267,7 @@ def make_text_separated_kana(flattened_trn,
             if 'R' in text:
                 continue
         if remove_extra_content:
-            # '<' '>' で囲まれた文字列を削除
+            # '<' '>' で囲まれた文字列（<sp>以外）を削除
             text = re.sub(r'(?<!<sp>)<[^>]+>', '', text)
         if remove_word_sep:
             text = text.replace('|', '')
@@ -185,83 +276,70 @@ def make_text_separated_kana(flattened_trn,
         if len(text) == 0:
             continue
 
-        kana_list, tag_list = convert_tagged_kana_string_to_kana_list_and_paralinguistic_info(text)
+        kana_list, label_list = tokenize_kana_string_and_extract_label_seq(text)
 
         texts.append(f"{utt_id} {' '.join(kana_list)}")
-        tags.append(f"{utt_id} {' '.join(tag_list)}")
-        segments.append(f"{utt_id} {start:.3f} {end:.3f}")
+        labels.append(f"{utt_id} {' '.join(label_list)}")
+        segments.append(f"{utt_id} {utterance['start']:.3f} {utterance['end']:.3f}")
 
-    return texts, tags, segments
+    return texts, labels, segments
 
-def remove_tags_kana(string):
-    """カナ文字列からタグを除去する.
 
+def remove_tag_from_kana_tagged_string(s: str):
+    """タグ付き文字列からタグを除去する.
     Args:
-        string (str): 平文の文字列
+        s (str): タグ付き文字列
 
     Returns:
-        str: タグを除去した文字列
     """
-    def extract_tag_string(s):
-        if len(s) == 0:
-            return '', ''
-        if s[0] != '(':
-            raise ValueError('タグの始まりではありません')
-        stack = []
-        for i, c in enumerate(s):
-            if c == '(':
-                stack.append(i)
-            elif c == ')':
-                stack.pop()
-                if len(stack) == 0:
-                    return s[:i+1], s[i+1:]
-        raise ValueError('タグの終わりが見つかりません')
 
-    def extract_text_from_tagged_string(s):
-        # 空文字列の場合は～文字列を返す
-        if len(s) == 0:
-            return ''
+    # 空文字列の場合は～文字列を返す
+    if len(s) == 0:
+        return ''
 
-        result = ''
+    result = ''
 
-        while len(s) > 0:
-            # タグが始まる前の部分を取り出す
-            match = re.match(r'^([^(]+)(.*)$', s)
-            if match:
-                result += match.group(1)
-                s = match.group(2)
-            else:
-                # 最長一致でタグの部分を取り出す
-                tagged_string, s = extract_tag_string(s)
-                match_ = re.match(r'^\(([^ ]+) (.+)\)$', tagged_string)
-                if not match_:
-                    if tagged_string == '(?)':
-                        continue
-                    elif tagged_string == '(L )':
-                        # 1例 (L <FV>) というものがあることを確認
-                        continue
-                    else:
-                        raise Exception('Invalid tagged string: {}'.format(tagged_string))
-                tag = match_.group(1)
-                content = match_.group(2)
-                # print(tag, content)
-                # content がタグを含む場合は再帰処理をする
-                if '(' in content:
-                    content = extract_text_from_tagged_string(content)
-                # タグごとの処理
-                if tag in ('F', 'D', 'D2', 'M', 'O', 'X', '笑', '泣', '咳', 'L'):
-                    pass
-                elif tag == '?':
-                    content = content.split(',')[0]
-                elif tag in ('W', 'B'):
-                    content = content.split(';')[0]
+    while len(s) > 0:
+        # タグが始まる前の部分を取り出す
+        match = re.match(r'^([^(]+)(.*)$', s)
+        if match:
+            result += match.group(1)
+            s = match.group(2)
+        else:
+            # 最長一致でタグの部分を取り出す
+            tagged_string, s = extract_head_tagged_string(s)
+            match_ = re.match(r'^\(([^ ]+) (.+)\)$', tagged_string)
+            if not match_:
+                if tagged_string == '(?)':
+                    continue
+                elif tagged_string == '(L )':
+                    # 1例 (L <FV>) というものがあることを確認
+                    continue
                 else:
-                    raise Exception(f'Unknown tag: {tag}')
-                result += content
-                
-        return result
-
-    return extract_text_from_tagged_string(string)
+                    raise Exception('Invalid tagged string: {}'.format(tagged_string))
+            tag = match_.group(1)
+            content = match_.group(2)
+            # タグごとにコンテンツの絞り込みをする
+            if tag in ('F', 'D', 'D2', 'M', 'O', 'X', '笑', '泣', '咳', 'L'):
+                # これらのタグの場合はそのまま
+                pass
+            else:
+                # とりあえずセミコロンとカンマで分割
+                contents = split_tagged_content_with_semicolon_or_comma(content)
+                if tag == '?':
+                    # ? の場合は最初の要素だけ
+                    content = contents[0]
+                elif tag in ('W', 'B'):
+                    # W, B の場合は最初の要素だけ
+                    content = contents[0]
+                else:
+                    raise Exception('Unknown tag: {}'.format(tag))
+            # content がタグを含む場合は再帰処理をする
+            if '(' in content:
+                content = remove_tag_from_kana_tagged_string(content)
+            result += content
+            
+    return result
 
 
 def make_text_kana(flattened_trn,
@@ -276,16 +354,7 @@ def make_text_kana(flattened_trn,
 
     lecture_id = flattened_trn['lecture_id']
     for utterance in flattened_trn['flattened_utterances']:
-        start = utterance['start']
-        end = utterance['end']
-        if lecture_id[0] == 'D':
-            lecture_id_with_ch = lecture_id + utterance['channel']
-        else:
-            lecture_id_with_ch = lecture_id
-        utt_id = f"{lecture_id_with_ch}_" + \
-                 f"{int(start):04d}{int(start*1000)%1000:03d}_" + \
-                 f"{int(end):04d}{int(end*1000)%1000:03d}"
-
+        utt_id = make_utterance_id_from_utterance_info(lecture_id, utterance)
         text = utterance['kana_text']
 
         # ボーカルフライ
@@ -313,90 +382,69 @@ def make_text_kana(flattened_trn,
         if remove_sp:
             text = text.replace('<sp>', '')
         if remove_tags:
-            text = remove_tags_kana(text)
+            text = remove_tag_from_kana_tagged_string(text)
         if len(text) == 0:
             continue
 
         texts.append(f"{utt_id} {text}")
-        segments.append(f"{utt_id} {start:.3f} {end:.3f}")
+        segments.append(f"{utt_id} {utterance['start']:.3f} {utterance['end']:.3f}")
 
     return texts, segments
 
 
-def remove_tags_plain(string):
-    """平文の文字列からタグを除去する.
-
+def remove_tag_from_plain_tagged_string(s: str):
+    """タグ付き文字列からタグを除去する.
     Args:
-        string (str): 平文の文字列
+        s (str): タグ付き文字列
 
     Returns:
-        str: タグを除去した文字列
     """
-    def extract_tag_string(s):
-        if len(s) == 0:
-            return '', ''
-        if s[0] != '(':
-            raise ValueError('タグの始まりではありません')
-        stack = []
-        for i, c in enumerate(s):
-            if c == '(':
-                stack.append(i)
-            elif c == ')':
-                stack.pop()
-                if len(stack) == 0:
-                    return s[:i+1], s[i+1:]
-        raise ValueError('タグの終わりが見つかりません')
 
-    def extract_text_from_tagged_string(s):
-        # 空文字列の場合は～文字列を返す
-        if len(s) == 0:
-            return ''
+    # 空文字列の場合は～文字列を返す
+    if len(s) == 0:
+        return ''
 
-        result = ''
+    result = ''
 
-        while len(s) > 0:
-            # タグが始まる前の部分を取り出す
-            match = re.match(r'^([^(]+)(.*)$', s)
-            if match:
-                result += match.group(1)
-                s = match.group(2)
-            else:
-                # 最長一致でタグの部分を取り出す
-                tagged_string, s = extract_tag_string(s)
-                match_ = re.match(r'^\(([^ ]+) (.+)\)$', tagged_string)
-                if not match_:
-                    if tagged_string == '(?)':
-                        continue
-                    else:
-                        raise Exception('Invalid tagged string: {}'.format(tagged_string))
-                tag = match_.group(1)
-                content = match_.group(2)
-                # print(tag, content)
-                # content がタグを含む場合は再帰処理をする
-                if '(' in content:
-                    content = extract_text_from_tagged_string(content)
-                # タグごとの処理
-                if tag in ('F', 'D', 'D2', 'M', 'O', 'X'):
-                    pass
-                elif tag == '?':
-                    content = content.split(',')[0]
-                elif tag == 'A':
-                    contents = content.split(';')
-                    c0 = contents[0]
-                    c1 = contents[1]
-                    if re.match(r'^[０-９．]+$', c1):
-                        content = c0
-                    else:
-                        content = c1
-                elif tag == 'K':
-                    content = content.split(';')[0]
+    while len(s) > 0:
+        # タグが始まる前の部分を取り出す
+        match = re.match(r'^([^(]+)(.*)$', s)
+        if match:
+            result += match.group(1)
+            s = match.group(2)
+        else:
+            # 最長一致でタグの部分を取り出す
+            tagged_string, s = extract_head_tagged_string(s)
+            match_ = re.match(r'^\(([^ ]+) (.+)\)$', tagged_string)
+            if not match_:
+                if tagged_string == '(?)':
+                    continue
                 else:
-                    raise Exception(f'Unknown tag: {tag}')
-                result += content
-                
-        return result
-
-    return extract_text_from_tagged_string(string)
+                    raise Exception('Invalid tagged string: {}'.format(tagged_string))
+            tag = match_.group(1)
+            content = match_.group(2)
+            # タグごとにコンテンツの絞り込みをする
+            if tag in ('F', 'D', 'D2', 'M', 'O', 'X'):
+                pass
+            else:
+                # とりあえずセミコロンとカンマで分割
+                contents = split_tagged_content_with_semicolon_or_comma(content)
+                if tag in ('?', 'K'):
+                    # ? の場合は最初の要素だけ
+                    content = contents[0]
+                elif tag == 'A':
+                    if re.match(r'^[０-９．]+$', contents[1]):
+                        content = contents[0]
+                    else:
+                        content = contents[1]
+                else:
+                    raise Exception('Unknown tag: {}'.format(tag))                    
+            # content がタグを含む場合は再帰処理をする
+            if '(' in content:
+                content = remove_tag_from_plain_tagged_string(content)
+            result += content
+            
+    return result
 
 
 def make_text_plain(flattened_trn,
@@ -409,16 +457,8 @@ def make_text_plain(flattened_trn,
 
     lecture_id = flattened_trn['lecture_id']
     for utterance in flattened_trn['flattened_utterances']:
-        start = utterance['start']
-        end = utterance['end']
-        if lecture_id[0] == 'D':
-            lecture_id_with_ch = lecture_id + utterance['channel']
-        else:
-            lecture_id_with_ch = lecture_id
-        utt_id = f"{lecture_id_with_ch}_" + \
-                 f"{int(start):04d}{int(start*1000)%1000:03d}_" + \
-                 f"{int(end):04d}{int(end*1000)%1000:03d}"
-
+        utt_id = make_utterance_id_from_utterance_info(lecture_id, utterance)
+        
         text = utterance['plain_text']
 
         if remove_privacy_utt:
@@ -432,14 +472,15 @@ def make_text_plain(flattened_trn,
         if remove_sp:
             text = text.replace('<sp>', '')
         if remove_tags:
-            text = remove_tags_plain(text)
+            text = remove_tag_from_plain_tagged_string(text)
         if len(text) == 0:
             continue
 
         texts.append(f"{utt_id} {text}")
-        segments.append(f"{utt_id} {start:.3f} {end:.3f}")
+        segments.append(f"{utt_id} {utterance['start']:.3f} {utterance['end']:.3f}")
 
     return texts, segments
+
 
 def flat_utterances(parsed_or_connected_trn, 
                     word_sep='|', remove_extra_content=False, 
@@ -622,161 +663,34 @@ def parse_trn_file(filename, encoding='shift_jis'):
 
     return output
 
+def main(trn_file_path, output_dir, mode,
+         encoding='shift_jis', gap=0.5, max=10.0, isolate_extra_content=True,
+         para_info={'F': 'filler', 'D': 'disfluency', '笑': 'laugh', 'W': 'ambiguity', 'M': 'meta'}):
+    parsed = parse_trn_file(trn_file_path, encoding=encoding)
+    connected = connect_utterances(parsed, gap=gap, max=max, isolate_extra_content=isolate_extra_content)
+    flattened = flat_utterances(connected)
+    
+    if mode == 'plain':
+        texts, segments = make_text_plain(flattened)
+    elif mode == 'kana':
+        texts, segments = make_text_kana(flattened)
+    elif mode == 'tokenized_kana':
+        texts, labels, segments = make_text_tokenized_kana(flattened)
+        for l, filename in para_info.items():
+            flags = convert_labels_to_flags(labels, l)
+            filepath = os.path.join(output_dir, filename)
+            with open(filepath, 'w') as file:
+                file.write('\n'.join(flags))
+    else:
+        raise Exception('Unknown mode: {}'.format(mode))
+    
+    filepath = os.path.join(output_dir, "text")
+    with open(filepath, 'w') as file:
+        file.write('\n'.join(texts))
+    filepath = os.path.join(output_dir, "segments")
+    with open(filepath, 'w') as file:
+        file.write('\n'.join(segments))
 
-__check_list = [
-    "_",
-    "(M (O _))",
-    "(M (F _)_)",
-    "(M (F _))",
-    "(? _,_)",
-    "(X (D _))",
-    "(X _)",
-    "(M (? _))",
-    "(X (F _))",
-    "(M (A _;_))",
-    "(X (D (? _)))",
-    "(O (? _))",
-    "(M (D _))",
-    "(M (O (? _)))",
-    "(X (D2 _))",
-    "(K _;_)",
-    "(M (A _;_;_))",
-    "(? (A _;_))",
-    "(? (F _))",
-    "(M _;_)",
-    "(M (M _))",
-    "(X (F (? _)))",
-    "(F (? _,_))",
-    "(? (F _,_))",
-    "(M _;_;_)",
-    "(? _,_;_)",
-    "(? _,_,_)",
-    "(? (D _))"
-]
-
-def remove_plain_tags(string):
-
-    def extract_tag_string(s):
-        if len(s) == 0:
-            return '', ''
-        if s[0] != '(':
-            raise ValueError('タグの始まりではありません')
-        stack = []
-        for i, c in enumerate(s):
-            if c == '(':
-                stack.append(i)
-            elif c == ')':
-                stack.pop()
-                if len(stack) == 0:
-                    return s[:i+1], s[i+1:]
-        raise ValueError('タグの終わりが見つかりません')
-
-    def extract_text_from_tagged_string(s):
-        # 空文字列の場合は～文字列を返す
-        if len(s) == 0:
-            return ''
-
-        result = ''
-
-        while len(s) > 0:
-            # タグが始まる前の部分を取り出す
-            match = re.match(r'^([^(]+)(.*)$', s)
-            if match:
-                result += match.group(1)
-                s = match.group(2)
-            else:
-                # 最長一致でタグの部分を取り出す
-                tagged_string, s = extract_tag_string(s)
-                match_ = re.match(r'^\(([^ ]+) (.+)\)$', tagged_string)
-                if not match_:
-                    if tagged_string == '(?)':
-                        continue
-                    else:
-                        raise Exception('Invalid tagged string: {}'.format(tagged_string))
-                tag = match_.group(1)
-                content = match_.group(2)
-                # print(tag, content)
-                # content がタグを含む場合は再帰処理をする
-                if '(' in content:
-                    content = extract_text_from_tagged_string(content)
-                # タグごとの処理
-                if tag in ('F', 'D', 'D2', 'M', 'O', 'X'):
-                    pass
-                elif tag == '?':
-                    content = content.split(',')[0]
-                elif tag == 'A':
-                    contents = content.split(';')
-                    c0 = contents[0]
-                    c1 = contents[1]
-                    if re.match(r'^[０-９．]+$', c1):
-                        content = c0
-                    else:
-                        content = c1
-                elif tag == 'K':
-                    content = content.split(';')[0]
-                else:
-                    raise Exception(f'Unknown tag: {tag}')
-                result += content
-                
-        return result
-
-    return extract_text_from_tagged_string(string)
-
-
-def __extract_tagged_strings(string):
-    def convert_tag_string_without_content(s):
-        match = re.match(r'^\([^ )]+\)$', s)
-        if match:
-            # print(s)
-            return s
-        match = re.match(r'^([^()]*)\(([^ ]+) (.+)\)([^())]*)$', s)
-        if match:
-            part1 = match.group(1)
-            part2 = match.group(2)
-            part3 = match.group(3)
-            part4 = match.group(4)
-            
-            # if '(' not in part3 and ')' not in part3:
-            #     if part2 not in ('F', 'D', 'D2', 'M', 'A', 'O', '?') or (part2 == '?' and ',' in part3):
-            #         print(f"({part2} {part3})")
-            
-            converted_part1 = convert_tag_string_without_content(part1) if len(part1) > 0 else ''
-            converted_part3 = convert_tag_string_without_content(part3) if len(part3) > 0 else ''
-            converted_part4 = convert_tag_string_without_content(part4) if len(part4) > 0 else ''
-            return f'{converted_part1}({part2} {converted_part3}){converted_part4}'
-        
-        result = ''
-        for sc in s.split(';'):
-            for cm in sc.split(','):
-                result += '_,'
-            result = result[:-1] + ';'
-        return result[:-1]
-
-    result = []
-    stack = []
-    start_index = 0
-
-    for i, char in enumerate(string):
-        if char == '(':
-            stack.append(i)
-        elif char == ')':
-            if stack:
-                start_index = stack.pop()
-                if len(stack) > 0:
-                    continue
-                tagged_string = string[start_index:i+1]
-                print(tagged_string)
-                converted_tagged_string =convert_tag_string_without_content(tagged_string)
-                # if converted_tagged_string in __check_list:
-                #     print(f"{tagged_string} -> {converted_tagged_string}")
-                result.append(converted_tagged_string)
-            else:
-                raise ValueError("Unbalanced parentheses")
-
-    if stack:
-        raise ValueError("Unbalanced parentheses")
-
-    return result
 
 if __name__ == "__main__":
     CSJ_PATH = "/autofs/diamond/share/corpus/CSJ"
@@ -792,28 +706,40 @@ if __name__ == "__main__":
     tagged_token_count = {}
     tag_count = {}
 
-    generator = tqdm(sorted(glob.glob(os.path.join(TRN_PATH, "**", "*.trn"), recursive=True)))
-    # generator = sorted(glob.glob(os.path.join(TRN_PATH, "**", "*.trn"), recursive=True))
+    # generator = tqdm(sorted(glob.glob(os.path.join(TRN_PATH, "**", "*.trn"), recursive=True)))
+    generator = sorted(glob.glob(os.path.join(TRN_PATH, "**", "*.trn"), recursive=True))
     for trn_file in generator:
         parsed = parse_trn_file(trn_file)
         connected = connect_utterances(parsed)
         flattened = flat_utterances(connected)
-        texts, tags, segments = make_text_separated_kana(flattened)
-        # for text, tag in zip(texts, tags):
-        #     for te, ta in zip(text.split(' '), tag.split(' ')):
-        #         ta = ta.replace('N', '')
-        #         if len(ta) == 0:
-        #             print(f"[{te}] ", end='')
-        #         else:
-        #             print(f"[{te}+{ta}] ", end='')
-        #     print("")
+        
+        # texts, segments = make_text_plain(flattened)
+        # for t in texts:
+        #     print(t)
+
+        # texts, segments = make_text_kana(flattened)
+        # for t in texts:
+        #     print(t)
+        
+        texts, tags, segments = make_text_tokenized_kana(flattened)
+        tags = convert_labels_to_flags(tags, "F")
+        for text, tag in zip(texts, tags):
+            print(f"{text.split(' ')[0]} ", end='')
+            for te, ta in zip(text.split(' ')[1:], tag.split(' ')[1:]):
+                ta = ta.replace('N', '')
+                if len(ta) == 0:
+                    print(f"{te} ", end='')
+                else:
+                    print(f"{te}+{ta} ", end='')
+            print("")
         # import ipdb; ipdb.set_trace()
-        for line in tags:
-            _, tt = line.split(' ', 1)
-            for t in tt.split(' '):
-                for ta in t:
-                    tag_count[ta] = tag_count.get(ta, 0) + 1
-        print(tag_count)
+
+        # for line in tags:
+        #     _, tt = line.split(' ', 1)
+        #     for t in tt.split(' '):
+        #         for ta in t:
+        #             tag_count[ta] = tag_count.get(ta, 0) + 1
+        # print(tag_count)
 
     # for text in texts:
     #     _, t = text.split(' ', 1)
