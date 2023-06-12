@@ -31,7 +31,7 @@ find "${WAV_DIR}" -type f -name "*[0-9].wav" | while IFS= read -r wav_file; do
     python local/make_text_from_csj_trn.py \
           "${trn_file}" \
           "${indiv_dir}" \
-          tokenized_kana \
+          tokenized_kana_para \
           --wav_file_path "${wav_file}" \
           --para_info F,filler D,disfluency
     # utils/fix_data_dir.sh "${indiv_dir}"

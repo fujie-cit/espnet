@@ -44,7 +44,9 @@ train_dev=train_dev
 recog_set="eval1 eval2 eval3"
 
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
-    local/data_prep.sh ${CSJDATATOP}
+    # TODO
+    
+    # local/data_prep.sh ${CSJDATATOP}
 
     # for x in ${recog_set}; do
     #     local/csj_eval_data_prep.sh data/csj-data/eval ${x}
@@ -53,17 +55,18 @@ if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     # for x in train eval1 eval2 eval3; do
     #     local/csj_rm_tag_sp_space.sh data/${x}
     # done
+    echo;
 fi
 
-# if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
-#     # make a development set
-#     utils/subset_data_dir.sh --first data/train 4000 data/${train_dev} # 6hr 31min
-#     n=$(($(wc -l < data/train/segments) - 4000))
-#     utils/subset_data_dir.sh --last data/train ${n} data/train_nodev
+if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
+    # make a development set
+    utils/subset_data_dir.sh --first data/train 4000 data/${train_dev} # 6hr 31min
+    n=$(($(wc -l < data/train/segments) - 4000))
+    utils/subset_data_dir.sh --last data/train ${n} data/train_nodev
 
-#     # remove duplicated utterances in the training set
-#     utils/data/remove_dup_utts.sh 300 data/train_nodev data/${train_set} # 233hr 36min
+    # remove duplicated utterances in the training set
+    utils/data/remove_dup_utts.sh 300 data/train_nodev data/${train_set} # 233hr 36min
 
-# fi
+fi
 
 # log "Successfully finished. [elapsed=${SECONDS}s]"

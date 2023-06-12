@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import os
 import re
 from typing import List, Tuple, Dict
@@ -710,6 +711,25 @@ def sort_as_texts(data, texts):
     data_dict = {k: v for k, v in [d.split(' ', 1) for d in data]}
     return [k + ' ' + data_dict[k] for k in [t.split(' ', 1)[0] for t in texts]]
 
+def combine_texts_with_labels(texts, labels, para_info):
+    para_keys = list(para_info.keys())
+    labels = sort_as_texts(labels, texts)
+    
+    result = []
+    for t, l in zip(texts, labels):
+        utt_id_text, tbody = t.split(' ', 1)
+        utt_id_label, lbody = l.split(' ', 1)
+        assert utt_id_text == utt_id_label
+        result_text = []
+        for t_token, l_token in zip(tbody.split(' '), lbody.split(' ')):
+            for para_key in para_keys:
+                if para_key in l_token:
+                    t_token = t_token + f"+{para_key}"
+            result_text.append(t_token)
+        result.append(utt_id_text + ' ' + ' '.join(result_text))
+    return result
+    
+
 def main(trn_file_path, output_dir, mode='tokenized_kana', wav_file_path=None,
          encoding='shift_jis', gap=0.5, max=10.0, 
          remove_extra_content=True, isolate_extra_content=True,
@@ -735,13 +755,16 @@ def main(trn_file_path, output_dir, mode='tokenized_kana', wav_file_path=None,
         texts, segments = make_text_plain(flattened)
     elif mode == 'kana':
         texts, segments = make_text_kana(flattened)
-    elif mode == 'tokenized_kana':
+    elif mode == 'tokenized_kana' or mode == 'tokenized_kana_para':
         texts, labels, segments = make_text_tokenized_kana(flattened)
     else:
         raise Exception('Unknown mode: {}'.format(mode))
     
     texts = sort_texts(texts)
     segments = sort_as_texts(segments, texts)
+
+    if mode == 'tokenized_kana_para':
+        texts = combine_texts_with_labels(texts, labels, para_info)
 
     # textの出力
     filepath = os.path.join(output_dir, "text")
@@ -751,13 +774,14 @@ def main(trn_file_path, output_dir, mode='tokenized_kana', wav_file_path=None,
     filepath = os.path.join(output_dir, "segments")
     with open(filepath, 'w') as file:
         file.write('\n'.join(segments) + '\n')
-    # 他タスクのターゲットの出力    
-    for l, filename in para_info.items():
-        flags = convert_labels_to_flags(labels, l)
-        flags = sort_as_texts(flags, texts)
-        filepath = os.path.join(output_dir, filename)
-        with open(filepath, 'w') as file:
-            file.write('\n'.join(flags) + '\n')
+    if mode == 'tokenized_kana':
+        # 他タスクのターゲットの出力    
+        for l, filename in para_info.items():
+            flags = convert_labels_to_flags(labels, l)
+            flags = sort_as_texts(flags, texts)
+            filepath = os.path.join(output_dir, filename)
+            with open(filepath, 'w') as file:
+                file.write('\n'.join(flags) + '\n')
     # wav.scpの出力
     if wav_file_path:
         filepath = os.path.join(output_dir, "wav.scp")
@@ -774,7 +798,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process TRN files.')
     parser.add_argument('trn_file_path', type=str, help='TRN file path')
     parser.add_argument('output_dir', type=str, help='Output directory')
-    parser.add_argument('mode', choices=['plain', 'kana', 'tokenized_kana'], help='Output mode')
+    parser.add_argument('mode', choices=['plain', 'kana', 'tokenized_kana', 'tokenized_kana_para'], help='Output mode')
     parser.add_argument('--wav_file_path', type=str, default=None, help='WAV file path')
     parser.add_argument('--encoding', type=str, default='shift_jis', help='TRN file encoding')
     parser.add_argument('--gap', type=float, default=0.5, help='Maximum gap between utterances')
