@@ -5,9 +5,10 @@ set -e
 set -u
 set -o pipefail
 
-train_set=train
-valid_set=dev
-test_sets="eval"
+train_set=train_nodup
+valid_set=train_dev
+test_sets="eval1 eval2 eval3"
+
 
 asr_config=conf/train_asr_conformer.yaml
 inference_config=conf/decode_asr.yaml
