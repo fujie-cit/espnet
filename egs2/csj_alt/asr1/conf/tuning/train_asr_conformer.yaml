@@ -1,9 +1,10 @@
 # This configuration requires 4 GPUs with 32GB memory
 batch_type: numel
 # batch_bins: 15000000
-batch_bins: 300000
+batch_bins:    4500000
 accum_grad: 6
-max_epoch: 100
+# max_epoch: 100
+max_epoch: 80
 patience: none
 init: xavier_uniform
 best_model_criterion:
@@ -50,7 +51,7 @@ optim_conf:
     lr: 0.002
 scheduler: warmuplr
 scheduler_conf:
-    warmup_steps: 25000
+    warmup_steps: 2500
 
 specaug: specaug
 specaug_conf:
