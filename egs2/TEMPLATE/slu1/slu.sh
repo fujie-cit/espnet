@@ -727,22 +727,22 @@ if ! "${skip_data_prep}"; then
                 --add_symbol "${blank}:0" \
                 --add_symbol "${oov}:1" \
                 --add_symbol "${sos_eos}:-1"
-            if "${use_transcript}"; then
-                ${python} -m espnet2.bin.tokenize_text  \
-                    --token_type "${token_type}" \
-                    --input "${data_feats}/lm_train_transcript.txt" --output "${transcript_token_list}" ${_opts} \
-                    --field 2- \
-                    --cleaner "${cleaner}" \
-                    --g2p "${g2p}" \
-                    --write_vocabulary true \
-                    --add_symbol "${blank}:0" \
-                    --add_symbol "${oov}:1" \
-                    --add_symbol "${sos_eos}:-1"
-            fi
-
         else
             log "Error: not supported --token_type '${token_type}'"
             exit 2
+        fi
+        _opts="--non_linguistic_symbols ${nlsyms_txt}"
+        if "${use_transcript}"; then
+            ${python} -m espnet2.bin.tokenize_text  \
+                --token_type "word" \
+                --input "${data_feats}/lm_train_transcript.txt" --output "${transcript_token_list}" ${_opts} \
+                --field 2- \
+                --cleaner "${cleaner}" \
+                --g2p "${g2p}" \
+                --write_vocabulary true \
+                --add_symbol "${blank}:0" \
+                --add_symbol "${oov}:1" \
+                --add_symbol "${sos_eos}:-1"
         fi
 
         # Create word-list for word-LM training
@@ -958,7 +958,7 @@ if ! "${skip_train}"; then
     if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
         if "${use_ngram}"; then
             log "Stage 9: Ngram Training: train_set=${data_feats}/lm_train.txt"
-            cut -f 2 -d " " ${data_feats}/lm_train.txt | lmplz -S "20%" --discount_fallback -o ${ngram_num} - >${ngram_exp}/${ngram_num}gram.arpa
+            cut -f 2- -d " " ${data_feats}/lm_train.txt | lmplz -S "20%" --discount_fallback -o ${ngram_num} - >${ngram_exp}/${ngram_num}gram.arpa
             build_binary -s ${ngram_exp}/${ngram_num}gram.arpa ${ngram_exp}/${ngram_num}gram.bin
         else
             log "Stage 9: Skip ngram stages: use_ngram=${use_ngram}"
