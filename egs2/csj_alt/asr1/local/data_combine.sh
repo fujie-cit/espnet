@@ -31,9 +31,9 @@ done
 # combine
 ind=data/indiv_other
 outd=data
-# utils/data/combine_data.sh $outd/eval1 $ind/eval/eval1/*
-# utils/data/combine_data.sh $outd/eval2 $ind/eval/eval2/*
-# utils/data/combine_data.sh $outd/eval3 $ind/eval/eval3/*
+utils/data/combine_data.sh $outd/eval1 $ind/eval/eval1/*
+utils/data/combine_data.sh $outd/eval2 $ind/eval/eval2/*
+utils/data/combine_data.sh $outd/eval3 $ind/eval/eval3/*
 ind=data/indiv
 utils/data/combine_data.sh $outd/train $ind/*
 

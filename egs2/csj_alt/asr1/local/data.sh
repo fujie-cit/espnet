@@ -55,6 +55,9 @@ if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     # for x in train eval1 eval2 eval3; do
     #     local/csj_rm_tag_sp_space.sh data/${x}
     # done
+
+    local/data_indiv.sh ${CSJDATATOP}
+    local/data_combine.sh
     echo;
 fi
 
