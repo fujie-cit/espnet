@@ -109,11 +109,15 @@ install_torch(){
         fi
     else
         if [ -z "${cuda_version}" ]; then
-            log python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cpu
-            python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cpu
+            # log python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cpu
+            # python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cpu
+            log python3 -m pip install "torch==${torch_version}" "torchaudio==$1"
+            python3 -m pip install "torch==${torch_version}" "torchaudio==$1"
         else
-            log python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cu"${cuda_version_without_dot}"
-            python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cu"${cuda_version_without_dot}"
+            # log python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cu"${cuda_version_without_dot}"
+            # python3 -m pip install "torch==${torch_version}" "torchaudio==$1" --extra-index-url https://download.pytorch.org/whl/cu"${cuda_version_without_dot}"
+            log python3 -m pip install "torch==${torch_version}" "torchaudio==$1"
+            python3 -m pip install "torch==${torch_version}" "torchaudio==$1"
         fi
     fi
 }
